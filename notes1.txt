@@ -1,0 +1,63 @@
+LLMOps
+******
+    llm-rag-project
+                backend
+                    rag.py (main rag file)
+                    main.py (FastAPI)
+                    requirements.txt (Dependencies)
+
+                uploads (Store the pdf files)
+
+                .env (api-key) (store the API Key)
+                
+                .gitignore (control the GitHub Commits)
+
+                Dockerfile (create Docker Image)
+
+                Jenkinsfile (create Pipeline)
+
+                .dockerignore (controls the commits in Docker Image)
+
+step 1.
+    modify requirements.txt file accroding to AWS Server
+
+    python-dotenv (reading keys from .env file)
+
+    uvicorn[standard] (suitable version run application in aws cloud)
+
+Step 2.
+    create .env file
+
+Step 3.
+    remove api key from "rag.py" and read from ".env" file
+
+Step 4.
+    create .gitignore file
+
+Step 5.
+    create the Dockerfile
+
+Step 6.
+    create Pipeline (Jenkinsfile)
+
+    Stage1. Checkout code from GitHub
+
+    Stage2. Build Docker Image (Dockerfile) 
+
+    Stage3. Push DockerImage to "DockerHub" (Optional) (GitHub)
+
+    Stage4: Deploy Docker Image in AWS Server
+
+Stage 7.
+    create .dockerignore file
+
+Step 8.
+    push complete build to GitHub
+
+    > git add .
+
+    > git commit -m "LLM Rag Project Ready"
+
+    > git remote add origin https://github.com/toolsknowledge/llmops.git
+
+    > git push -u origin master

@@ -2,7 +2,7 @@
 // Jenkinsfile — CI/CD pipeline for LLM RAG Project
 // Trigger: GitHub webhook on push to main
 // Flow:    Checkout → Build Docker image → Push (optional)
-//          → SSH to EC2 → Pull image → Restart container
+//          → SSH to EC2 → Pull image → Restart container  (50% Cloud Know AWS / AZURE / GCP)
 // ------------------------------------------------------------
 pipeline {
     agent any
