@@ -1,0 +1,57 @@
+1) python3 -m venv venv
+
+2) source venv\bin\activate (mac)
+   venv\Scripts\activate (windows)
+
+3) pip install -r requirements.txt
+Ex.
+        langchain
+            LLM Framework
+            Define LLM Flow
+
+        pypdf
+            read pdf file
+
+        sentence-transformers
+            used to create embeddings
+
+        chromadb
+            chromadb used to connect to vectordb
+
+        openai
+            used to generate AI output
+
+        python-multipart
+            used to upload the pdf files
+
+*********************************************************************************************
+Step 1.
+    do changes in requirements.txt
+
+    uvicorn[standard]
+    python-dotenv
+
+Step 2.
+    create .env file
+
+Step 3.
+    modify rag.py file
+
+Step 4.
+    create .gitignore file
+
+Step 5.
+    create .dockerignore file
+
+Step 6.
+    create Dockerfile
+
+Step 7.
+    create Jenkinsfile (Pipeline)
+        Checkout appln from GitHub (Stage 1)
+        Build Docker Image (Dockerfile) (Stage 2)
+        Push Docker Image to Docker Hub (Optional) (Stage 3)
+        Deploy Docker Image to EC2 (Stage 4)
+
+Step 8.
+        push code to repo

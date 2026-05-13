@@ -1,0 +1,16 @@
+__pycache__/
+*.pyc
+venv/
+.venv/
+.env
+.env.*
+!.env.example
+.git/
+.gitignore
+.idea/
+.vscode/
+*.log
+uploads/*.pdf
+chroma/
+.chroma/
+node_modules/
