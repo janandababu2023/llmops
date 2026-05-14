@@ -1,10 +1,6 @@
 # ------------------------------------------------------------
 # Dockerfile for LLM RAG Project
-# NOTE: Using Python 3.12 here (NOT 3.14) for stability.
-# Many ML libraries (sentence-transformers, chromadb, torch)
-# do not yet have wheels for Python 3.14, which will cause
-# pip install to fail or take forever to build from source.
-# 3.12 is the safe "production" choice in May 2026.
+# Python 3.12 for stability with ML libraries
 # ------------------------------------------------------------
 FROM python:3.12-slim
 
@@ -13,30 +9,45 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1
 
-# System dependencies (needed by some ML libs)
+# System dependencies needed by ML libs
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Working directory inside the container
-WORKDIR /app
+# ------------------------------------------
+# FIX 1: Set WORKDIR once to /app/backend
+# ------------------------------------------
+WORKDIR /app/backend
 
-# Install Python dependencies first (caching layer)
+# ------------------------------------------
+# FIX 2: pip root warning suppressed
+# ------------------------------------------
 COPY backend/requirements.txt .
-RUN pip install --upgrade pip && pip install -r requirements.txt
+RUN pip install --upgrade pip --root-user-action=ignore && \
+    pip install -r requirements.txt --root-user-action=ignore
 
-# Copy backend application code
-COPY backend/ ./backend/
+# Copy backend application code into /app/backend
+COPY backend/ .
 
-# Create uploads directory (sibling of backend, matches main.py path)
-RUN mkdir -p /app/uploads
+# ------------------------------------------
+# FIX 3: uploads folder inside /app/backend
+# matches os.path.dirname(__file__) in main.py
+# which resolves to /app/backend/uploads
+# ------------------------------------------
+RUN mkdir -p /app/backend/uploads
+
+# Non-root user for security
+RUN useradd -m -u 1001 appuser && \
+    chown -R appuser:appuser /app
+USER appuser
 
 # Expose FastAPI port
 EXPOSE 8000
 
-# Run from /app/backend so the relative "../uploads/..." path works
-WORKDIR /app/backend
+# Health check — confirms app is truly running
+HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
 
-# Start the FastAPI server
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Start FastAPI server
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--log-level", "info"]
