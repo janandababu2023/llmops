@@ -1,8 +1,8 @@
 // ------------------------------------------------------------
 // Jenkinsfile — CI/CD pipeline for LLM RAG Project
-// Trigger: GitHub webhook on push to main
-// Flow:    Checkout → Build Docker image → Push (optional)
-//          → SSH to EC2 → Pull image → Restart container  (50% Cloud Know AWS / AZURE / GCP)
+// Trigger: GitHub webhook on push to master
+// Flow:    Checkout → Build Docker image → Push to Docker Hub
+//          → SSH to EC2 → Pull image → Restart container
 // ------------------------------------------------------------
 pipeline {
     agent any
@@ -10,21 +10,30 @@ pipeline {
     environment {
         IMAGE_NAME     = "llm-rag-app"
         IMAGE_TAG      = "${env.BUILD_NUMBER}"
-        EC2_HOST       = credentials('EC2_HOST')          // e.g. ec2-user@1.2.3.4
+        EC2_HOST       = credentials('EC2_HOST')          // e.g. ubuntu@1.2.3.4
         OPENAI_API_KEY = credentials('OPENAI_API_KEY')    // Jenkins secret
-        // Optional: if you push to Docker Hub
-        DOCKERHUB_USER = "your-dockerhub-username"
+        DOCKERHUB_USER = "excelr"                         // Your Docker Hub username
     }
 
     stages {
 
         stage('Checkout') {
             steps {
+                // Pulls whatever branch this job is configured to track
+                // (configured in Jenkins UI: Branch Specifier = */master)
                 checkout scm
+                echo "Building branch: ${env.BRANCH_NAME ?: 'master'}"
             }
         }
 
         stage('Build Docker Image') {
+            // Only build/deploy from master — protects against feature branches
+            when {
+                anyOf {
+                    branch 'master'
+                    expression { env.BRANCH_NAME == null }   // classic Pipeline job
+                }
+            }
             steps {
                 sh '''
                     docker build -t ${IMAGE_NAME}:${IMAGE_TAG} .
@@ -33,10 +42,13 @@ pipeline {
             }
         }
 
-        // OPTIONAL — push image to Docker Hub so EC2 can pull it.
-        // If you skip this, the "Deploy to EC2" stage below should
-        // instead copy the source to EC2 and build there.
         stage('Push to Docker Hub') {
+            when {
+                anyOf {
+                    branch 'master'
+                    expression { env.BRANCH_NAME == null }
+                }
+            }
             steps {
                 withCredentials([usernamePassword(
                     credentialsId: 'dockerhub-creds',
@@ -47,12 +59,19 @@ pipeline {
                         echo "$DH_PASS" | docker login -u "$DH_USER" --password-stdin
                         docker tag ${IMAGE_NAME}:latest $DH_USER/${IMAGE_NAME}:latest
                         docker push $DH_USER/${IMAGE_NAME}:latest
+                        docker logout
                     '''
                 }
             }
         }
 
         stage('Deploy to EC2') {
+            when {
+                anyOf {
+                    branch 'master'
+                    expression { env.BRANCH_NAME == null }
+                }
+            }
             steps {
                 sshagent(credentials: ['ec2-ssh-key']) {
                     sh '''
@@ -79,3 +98,4 @@ pipeline {
         always  { sh 'docker image prune -f || true' }
     }
 }
+
