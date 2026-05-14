@@ -1,15 +1,16 @@
 // ------------------------------------------------------------
 // Jenkinsfile — CI/CD pipeline for LLM RAG Project
 // Trigger: GitHub webhook on push to master
-// Flow:    Checkout → Build Docker image → Push to Docker Hub
-//          → SSH to EC2 → Pull image → Restart container
+// Flow:    Clean Workspace → Checkout → Build Docker image
+//          → Push to Docker Hub → SSH to EC2
+//          → Pull image → Restart container
 // ------------------------------------------------------------
 pipeline {
     agent any
 
     environment {
         IMAGE_NAME     = "llm-rag-app"
-        IMAGE_TAG      = "${BUILD_NUMBER}"          // FIX 1: was ${env.BUILD_NUMBER}
+        IMAGE_TAG      = "${BUILD_NUMBER}"
         DOCKERHUB_USER = "janandababu2023"
         EC2_HOST       = credentials('EC2_HOST')
         OPENAI_API_KEY = credentials('OPENAI_API_KEY')
@@ -18,19 +19,32 @@ pipeline {
     stages {
 
         // --------------------------------------------------
-        // STAGE 1 : Checkout code from GitHub
+        // STAGE 1 : Clean workspace
+        // ensures fresh code from GitHub every build
+        // --------------------------------------------------
+        stage('Clean Workspace') {
+            steps {
+                cleanWs()
+                echo "✅ Workspace cleaned"
+            }
+        }
+
+        // --------------------------------------------------
+        // STAGE 2 : Checkout fresh code from GitHub
         // --------------------------------------------------
         stage('Checkout') {
             steps {
                 checkout scm
                 echo "✅ Checked out branch: ${env.BRANCH_NAME ?: 'master'}"
+
+                // Verify correct username pulled from GitHub
+                sh "grep DOCKERHUB_USER Jenkinsfile"
             }
         }
 
         // --------------------------------------------------
-        // STAGE 2 : Build Docker image
-        // FIX 2: build with full name janandababu2023/llm-rag-app
-        // so push works without re-tagging
+        // STAGE 3 : Build Docker image
+        // builds with full name janandababu2023/llm-rag-app
         // --------------------------------------------------
         stage('Build Docker Image') {
             when {
@@ -54,9 +68,9 @@ pipeline {
         }
 
         // --------------------------------------------------
-        // STAGE 3 : Push image to Docker Hub
-        // FIX 3: use PAT token not password in dockerhub-creds
-        // Go to hub.docker.com → Account Settings
+        // STAGE 4 : Push image to Docker Hub
+        // dockerhub-creds must use PAT not password
+        // hub.docker.com → Account Settings
         //   → Security → New Access Token
         //   → paste token as password in Jenkins credential
         // --------------------------------------------------
@@ -89,7 +103,7 @@ pipeline {
         }
 
         // --------------------------------------------------
-        // STAGE 4 : Deploy to EC2
+        // STAGE 5 : Deploy to EC2
         // pulls latest image and restarts container
         // --------------------------------------------------
         stage('Deploy to EC2') {
