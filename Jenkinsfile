@@ -9,7 +9,7 @@ pipeline {
 
     environment {
         IMAGE_NAME     = "llm-rag-app"
-        IMAGE_TAG      = "${BUILD_NUMBER}"                // FIX 1: was ${env.BUILD_NUMBER}
+        IMAGE_TAG      = "${BUILD_NUMBER}"          // FIX 1: was ${env.BUILD_NUMBER}
         DOCKERHUB_USER = "janandababu2023"
         EC2_HOST       = credentials('EC2_HOST')
         OPENAI_API_KEY = credentials('OPENAI_API_KEY')
@@ -29,9 +29,8 @@ pipeline {
 
         // --------------------------------------------------
         // STAGE 2 : Build Docker image
-        // FIX 2: build directly with full name
-        // janandababu2023/llm-rag-app:tag
-        // so push stage works without re-tagging
+        // FIX 2: build with full name janandababu2023/llm-rag-app
+        // so push works without re-tagging
         // --------------------------------------------------
         stage('Build Docker Image') {
             when {
@@ -56,6 +55,10 @@ pipeline {
 
         // --------------------------------------------------
         // STAGE 3 : Push image to Docker Hub
+        // FIX 3: use PAT token not password in dockerhub-creds
+        // Go to hub.docker.com → Account Settings
+        //   → Security → New Access Token
+        //   → paste token as password in Jenkins credential
         // --------------------------------------------------
         stage('Push to Docker Hub') {
             when {
