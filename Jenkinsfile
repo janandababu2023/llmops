@@ -9,39 +9,54 @@ pipeline {
 
     environment {
         IMAGE_NAME     = "llm-rag-app"
-        IMAGE_TAG      = "${env.BUILD_NUMBER}"
-        EC2_HOST       = credentials('EC2_HOST')          // e.g. ubuntu@1.2.3.4
-        OPENAI_API_KEY = credentials('OPENAI_API_KEY')    // Jenkins secret
-        DOCKERHUB_USER = "janandababu2023"                // Your Docker Hub username
+        IMAGE_TAG      = "${BUILD_NUMBER}"                // FIX 1: was ${env.BUILD_NUMBER}
+        DOCKERHUB_USER = "janandababu2023"
+        EC2_HOST       = credentials('EC2_HOST')
+        OPENAI_API_KEY = credentials('OPENAI_API_KEY')
     }
 
     stages {
 
+        // --------------------------------------------------
+        // STAGE 1 : Checkout code from GitHub
+        // --------------------------------------------------
         stage('Checkout') {
             steps {
-                // Pulls whatever branch this job is configured to track
-                // (configured in Jenkins UI: Branch Specifier = */master)
                 checkout scm
-                echo "Building branch: ${env.BRANCH_NAME ?: 'master'}"
+                echo "✅ Checked out branch: ${env.BRANCH_NAME ?: 'master'}"
             }
         }
 
+        // --------------------------------------------------
+        // STAGE 2 : Build Docker image
+        // FIX 2: build directly with full name
+        // janandababu2023/llm-rag-app:tag
+        // so push stage works without re-tagging
+        // --------------------------------------------------
         stage('Build Docker Image') {
-            // Only build/deploy from master — protects against feature branches
             when {
                 anyOf {
                     branch 'master'
-                    expression { env.BRANCH_NAME == null }   // classic Pipeline job
+                    expression { env.BRANCH_NAME == null }
                 }
             }
             steps {
                 sh '''
-                    docker build -t ${IMAGE_NAME}:${IMAGE_TAG} .
-                    docker tag ${IMAGE_NAME}:${IMAGE_TAG} ${IMAGE_NAME}:latest
+                    echo "🔨 Building: ${DOCKERHUB_USER}/${IMAGE_NAME}:${IMAGE_TAG}"
+
+                    docker build \
+                        -t ${DOCKERHUB_USER}/${IMAGE_NAME}:${IMAGE_TAG} \
+                        -t ${DOCKERHUB_USER}/${IMAGE_NAME}:latest \
+                        .
+
+                    echo "✅ Build complete"
                 '''
             }
         }
 
+        // --------------------------------------------------
+        // STAGE 3 : Push image to Docker Hub
+        // --------------------------------------------------
         stage('Push to Docker Hub') {
             when {
                 anyOf {
@@ -51,20 +66,29 @@ pipeline {
             }
             steps {
                 withCredentials([usernamePassword(
-                    credentialsId: 'dockerhub-creds',
+                    credentialsId : 'dockerhub-creds',
                     usernameVariable: 'DH_USER',
                     passwordVariable: 'DH_PASS'
                 )]) {
                     sh '''
+                        echo "📦 Logging in to Docker Hub..."
                         echo "$DH_PASS" | docker login -u "$DH_USER" --password-stdin
-                        docker tag ${IMAGE_NAME}:latest $DH_USER/${IMAGE_NAME}:latest
-                        docker push $DH_USER/${IMAGE_NAME}:latest
+
+                        echo "📦 Pushing images..."
+                        docker push ${DOCKERHUB_USER}/${IMAGE_NAME}:${IMAGE_TAG}
+                        docker push ${DOCKERHUB_USER}/${IMAGE_NAME}:latest
+
                         docker logout
+                        echo "✅ Push complete"
                     '''
                 }
             }
         }
 
+        // --------------------------------------------------
+        // STAGE 4 : Deploy to EC2
+        // pulls latest image and restarts container
+        // --------------------------------------------------
         stage('Deploy to EC2') {
             when {
                 anyOf {
@@ -75,27 +99,51 @@ pipeline {
             steps {
                 sshagent(credentials: ['ec2-ssh-key']) {
                     sh '''
+                        echo "🚀 Deploying to EC2: $EC2_HOST"
+
                         ssh -o StrictHostKeyChecking=no $EC2_HOST "
-                            docker pull ${DOCKERHUB_USER}/${IMAGE_NAME}:latest &&
-                            docker stop llm-rag || true &&
-                            docker rm   llm-rag || true &&
+
+                            echo '--- Pulling latest image ---'
+                            docker pull ${DOCKERHUB_USER}/${IMAGE_NAME}:latest
+
+                            echo '--- Stopping old container ---'
+                            docker stop llm-rag || true
+                            docker rm   llm-rag || true
+
+                            echo '--- Starting new container ---'
                             docker run -d \
                                 --name llm-rag \
-                                -p 8000:8000 \
-                                -e OPENAI_API_KEY='${OPENAI_API_KEY}' \
                                 --restart unless-stopped \
+                                -p 8000:8000 \
+                                -e OPENAI_API_KEY=${OPENAI_API_KEY} \
                                 ${DOCKERHUB_USER}/${IMAGE_NAME}:latest
+
+                            echo '--- Container status ---'
+                            docker ps | grep llm-rag
+
+                            echo '--- Cleaning old images ---'
+                            docker image prune -f
                         "
+
+                        echo "✅ Deployment complete"
                     '''
                 }
             }
         }
     }
 
+    // --------------------------------------------------
+    // POST ACTIONS
+    // --------------------------------------------------
     post {
-        success { echo "✅ Deployed build #${env.BUILD_NUMBER} successfully" }
-        failure { echo "❌ Build #${env.BUILD_NUMBER} failed — check logs" }
-        always  { sh 'docker image prune -f || true' }
+        success {
+            echo "✅ Build #${BUILD_NUMBER} deployed successfully"
+        }
+        failure {
+            echo "❌ Build #${BUILD_NUMBER} failed — check logs above"
+        }
+        always {
+            sh 'docker image prune -f || true'
+        }
     }
 }
-
